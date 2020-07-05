@@ -70,6 +70,7 @@ def prodigal_fasta_to_genome_info(prodigal_fasta, output_dir):
             sequences.append(s)
     
     info = pd.DataFrame(info).astype({'Start' : 'int'}).sort_values(by='Start')
+    info.set_index('ProteinId', inplace=True)
     out_path = output_dir + '/' + prodigal_fasta.split('/')[-1]
 
     with open(out_path, 'w') as f:
