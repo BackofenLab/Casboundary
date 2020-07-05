@@ -30,11 +30,14 @@ import warnings
 warnings.simplefilter('ignore')
 
 from pathlib import Path
+from Bio import SeqIO
+from scipy import sparse
 
 # Project imports
 from prodigal import run_prodigal, prodigal_fasta_to_genome_info
 from hmmer import run_hmmsearch
 from utils import extract_targz
+from protein_features import get_protein_features
 
 CAS_HMM_TAR_PATH = 'Cas_HMM.tar.gz'
 SIG_HMM_TAR_PATH = 'Sig_HMM.tar.gz'
@@ -44,7 +47,7 @@ CAS_HMM_DIR = 'Cas_HMM'
 SIG_HMM_DIR = 'Sig_HMM'
 GEN_HMM_DIR = 'Gen_HMM'
 
-GEN_HMM_NAMES = 'gen_hmm_names.txt'
+GEN_HMM_NAMES_FILE = 'gen_hmm_names.txt'
 
 def find_potential_regions(fasta_file, sequence_completeness, output_dir, hmmsearch_output_dir, n_cpus, offset=50):
     print('Running Prodigal on input Fasta file.')
@@ -65,9 +68,11 @@ def find_potential_regions(fasta_file, sequence_completeness, output_dir, hmmsea
         start = max(0, i - offset)
         end = min(len(info_df), i + offset) + 1
         r = info_df.iloc[start:end]
+        r = r.assign(RefSignature=['no'] * r.shape[0])
+        r.at[sig, 'RefSignature'] = 'yes'
         regions.append(r)
     
-    return regions
+    return proteins_fasta_file, regions
 
 def find_signatures(hmmsearch_output_dir):
     files = glob.glob(hmmsearch_output_dir + '/*.tab')
@@ -82,6 +87,66 @@ def find_signatures(hmmsearch_output_dir):
         signatures.update(prot for prot, _, _ in hmm_results)
     
     return sorted(signatures)
+
+def extract_regions_sequences(proteins_fasta_file, regions, output_dir):
+    output_dir = output_dir + '/potential_regions'
+
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    
+    regions_fasta_files = []
+    
+    with open(proteins_fasta_file, 'r') as file_:
+        sequences = SeqIO.to_dict(SeqIO.parse(file_, 'fasta'))
+        
+    for i, r in enumerate(regions):
+        r_seqs = [sequences[prot_id] for prot_id in r.index]
+
+        out_path = output_dir + f'/region_{i+1}.fasta'
+        with open(out_path, 'w') as out_file:
+            for s in r_seqs:
+                out_file.write(s.format('fasta'))                         
+        
+        regions_fasta_files.append(out_path)
+    
+    return regions_fasta_files
+
+def build_hmm_matrix(region, region_name, matrix_output_dir, hmmsearch_output_dir, hmm_to_index):
+    prot_to_index = dict(zip(region.index, np.arange(region.shape[0])))
+    hmm_results_files = glob.glob(hmmsearch_output_dir + '/*.tab')
+    X_hmm = sparse.dok_matrix((region.shape[0], len(hmm_to_index)), dtype=np.double)
+            
+    for hmm_f in hmm_results_files:
+        hmm = np.loadtxt(hmm_f, usecols=[0, 2, 5], dtype=np.str)
+        
+        if len(hmm) and len(hmm.shape) == 1:
+            hmm = np.expand_dims(hmm, axis=0)
+
+        for prot, name, bitscore in hmm:
+            i = prot_to_index[prot]
+            j = hmm_to_index[name]
+            bitscore = float(bitscore)
+            X_hmm[i, j] = max(X_hmm[i, j], bitscore)
+        
+    X_hmm = sparse.csr_matrix(X_hmm)
+    sparse.save_npz(matrix_output_dir + '/' + region_name + '.npz', X_hmm, compressed=True)
+    
+    return X_hmm
+
+def build_protein_properties_matrix(region, region_fasta, region_name, matrix_output_dir):
+    with open(region_fasta, 'r') as file_:
+        sequences = SeqIO.to_dict(SeqIO.parse(file_, 'fasta'))
+    
+    X_prop = []
+    for prot_id in region.index:
+        seq_record = sequences[prot_id]
+        names, prot_features = get_protein_features(str(seq_record.seq))
+        X_prop.append(prot_features)
+    
+    X_prop = np.array(X_prop)
+    np.savetxt(matrix_output_dir + '/' + region_name + '.prop.txt', X_prop, header=' '.join(names))
+    
+    return X_prop
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
@@ -112,5 +177,30 @@ if __name__ == '__main__':
     if not os.path.exists(args.hmmsearch_output_dir):
         Path(args.hmmsearch_output_dir).mkdir(parents=True, exist_ok=True)
     
-    regions = find_potential_regions(args.fasta_file, args.sequence_completeness,
-                                     args.output_dir, args.hmmsearch_output_dir, args.n_cpus)
+    proteins_fasta_file, regions = find_potential_regions(args.fasta_file, args.sequence_completeness,
+                                                          args.output_dir, args.hmmsearch_output_dir,
+                                                          args.n_cpus)
+    
+    regions_fasta_files = extract_regions_sequences(proteins_fasta_file, regions, args.output_dir)
+    gen_output_dir = args.hmmsearch_output_dir + '/' + GEN_HMM_DIR
+    gen_hmm_names = np.loadtxt(GEN_HMM_NAMES_FILE, dtype=np.str)
+    gen_hmm_to_index = dict(zip(gen_hmm_names, np.arange(len(gen_hmm_names))))
+    regions_hmm_list = []
+    regions_prop_list = []
+    
+    print('Extracting Generic HMM features and protein properties features.')
+    for r, f in zip(regions, regions_fasta_files):
+        r_name = f.rsplit('/', 1)[1].replace('.fasta', '')
+        run_hmmsearch(f, GEN_HMM_DIR, region_output_dir, args.n_cpus, 1000, use_mp=False)
+
+        X_hmm = build_hmm_matrix(r, r_name, args.output_dir + '/potential_regions',
+                                 args.hmmsearch_output_dir, gen_hmm_to_index)
+        
+        regions_hmm_list.append(X_hmm)
+
+        X_prop = build_protein_properties_matrix(r, f, r_name, args.output_dir + '/potential_regions')
+
+        regions_prop_list.append(X_prop)
+    
+      
+

@@ -28,6 +28,8 @@ import os
 import glob
 import multiprocessing as mp
 
+from pathlib import Path
+
 def hmmsearch(log_file_path, output_file_path, cutoff, hmm_file_path, fasta_file_path, n_cpus, hmmsearch_cmd='hmmsearch'):
     with open(log_file_path, 'w') as log_file:
             sp.call([hmmsearch_cmd, '--tblout', output_file_path, '-E', str(cutoff),
@@ -36,7 +38,7 @@ def hmmsearch(log_file_path, output_file_path, cutoff, hmm_file_path, fasta_file
 
 def run_hmmsearch(fasta_file, hmm_dir, output_dir, n_cpus, cutoff, hmmsearch_cmd='hmmsearch', use_mp=False):
     if not os.path.exists(output_dir):
-        os.mkdir(output_dir)
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
     
     hmm_models = glob.glob(hmm_dir + '/*.hmm')
 
