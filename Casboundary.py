@@ -52,6 +52,7 @@ GEN_HMM_DIR = 'Gen_HMM'
 ML_MODELS_DIR = 'ML_models'
 
 GEN_HMM_NAMES_FILE = 'gen_hmm_names.txt'
+CAS_HMM_NAMES_FILE = 'cas_hmm_names.txt'
 
 def find_potential_regions(fasta_file, sequence_completeness, output_dir, hmmsearch_output_dir, n_cpus, offset=50):
     print('Running Prodigal on input Fasta file.')
@@ -121,9 +122,9 @@ def extract_regions_sequences(proteins_fasta_file, regions, output_dir):
     
     return regions_fasta_files
 
-def build_hmm_matrix(region, region_name, matrix_output_dir, hmmsearch_output_dir, hmm_to_index):
+def build_hmm_matrix(region, region_name, matrix_output_dir, hmmsearch_output_dirs, hmm_to_index, cas=False):
     prot_to_index = dict(zip(region.index, np.arange(region.shape[0])))
-    hmm_results_files = glob.glob(hmmsearch_output_dir + '/*.tab')
+    hmm_results_files = sum((glob.glob(ho_dir + '/*.tab') for ho_dir in hmmsearch_output_dirs), [])
     X_hmm = sparse.dok_matrix((region.shape[0], len(hmm_to_index)), dtype=np.double)
             
     for hmm_f in hmm_results_files:
@@ -132,8 +133,14 @@ def build_hmm_matrix(region, region_name, matrix_output_dir, hmmsearch_output_di
         if len(hmm) and len(hmm.shape) == 1:
             hmm = np.expand_dims(hmm, axis=0)
 
-        for prot, name, bitscore in hmm:
+        for prot, model, bitscore in hmm:
             i = prot_to_index[prot]
+
+            if cas:
+                name = hmm_f.rsplit('/', 1)[1].replace('.tab', '')
+            else:
+                name = model
+            
             j = hmm_to_index[name]
             bitscore = float(bitscore)
             X_hmm[i, j] = max(X_hmm[i, j], bitscore)
@@ -187,18 +194,30 @@ def find_boundaries(y_pred, max_gap, i_sig):
     
     return last_left, last_right
 
-# def merge_overlapped_cassettes(cassettes_list, max_diff=2):
+# def merge_cassettes(cassette_boundaries_list, min_common=3):
 #     stop = False
-#     merged_cassettes = []
+#     remaining_cassettes = [set(range(c[0], c[1])) for c in cassette_boundaries_list]
+#     remaining_cassettes = sorted(remaining_cassettes, key=lambda c : -len(c))
 
 #     while not stop:
 #         stop = True
+        
+#         while len(remaining_cassettes):
+#             c0 = remaining_cassettes.pop(0)
+#             indices_to_remove = []
 
-#         for i, cassette in enumerate(cassettes_list):
-#             diff = np.array([len(set(cassette).symmetric_difference(set(other))) for other in cassettes_list], dtype=np.int)
-#             indices_to_merge = np.where(diff <= max_diff)[0]
+#             for i, c1 in enumerate(remaining_cassettes):
+#                 if len(c0.intersection(c1)) >= min_common:
+#                     c0.update(c1)
+#                     indices_to_remove.append(i)
+            
+#             if len(indices_to_remove):
+#                 stop = False
 
-#             if len(indices_to_merge):
+#                 for i in indices_to_remove[::-1]:
+#                     remaining_cassettes.remove(i)
+            
+#             merged_cassettes.append(c0)
                             
 
 if __name__ == '__main__':
@@ -239,23 +258,42 @@ if __name__ == '__main__':
                                                           args.n_cpus)
     
     regions_fasta_files = extract_regions_sequences(proteins_fasta_file, regions_dataframes, args.output_dir)
+    
     gen_output_dir = args.hmmsearch_output_dir + '/' + GEN_HMM_DIR
     gen_hmm_names = np.loadtxt(GEN_HMM_NAMES_FILE, dtype=np.str)
     gen_hmm_to_index = dict(zip(gen_hmm_names, np.arange(len(gen_hmm_names))))
-    regions_hmm_list = []
-    regions_prop_list = []
     
-    print('Extracting Generic HMM features and protein properties features.')
+    sig_output_dir = args.hmmsearch_output_dir + '/' + SIG_HMM_DIR
+    cas_output_dir = args.hmmsearch_output_dir + '/' + CAS_HMM_DIR
+    cas_hmm_names = np.loadtxt(CAS_HMM_NAMES_FILE, dtype=np.str)
+    cas_hmm_to_index = dict(zip(cas_hmm_names, np.arange(len(cas_hmm_names))))
+    
+    regions_gen_hmm_list = []
+    regions_cas_hmm_list = []
+    regions_prop_list = []
+    matrix_output_dir = args.output_dir + '/potential_regions'
+    
+    print('Extracting HMM features and protein properties features.')
     for r, f in zip(regions_dataframes, regions_fasta_files):
         r_name = f.rsplit('/', 1)[1].replace('.fasta', '')
         run_hmmsearch(f, GEN_HMM_DIR, gen_output_dir + '/' + r_name, args.n_cpus, 1000, use_mp=False)
 
-        X_hmm = build_hmm_matrix(r, r_name, args.output_dir + '/potential_regions',
-                                 args.hmmsearch_output_dir + '/Gen_HMM/' + r_name, gen_hmm_to_index)
+        X_gen_hmm = build_hmm_matrix(r, r_name, matrix_output_dir,
+                                     [gen_output_dir + '/' + r_name],
+                                     gen_hmm_to_index)
         
-        regions_hmm_list.append(X_hmm)
+        regions_gen_hmm_list.append(X_gen_hmm)
 
-        X_prop = build_protein_properties_matrix(r, f, r_name, args.output_dir + '/potential_regions')
+        run_hmmsearch(f, SIG_HMM_DIR, sig_output_dir + '/' + r_name, args.n_cpus, 1, use_mp=True)
+        run_hmmsearch(f, CAS_HMM_DIR, cas_output_dir + '/' + r_name, args.n_cpus, 1, use_mp=True)
+
+        X_cas_hmm = build_hmm_matrix(r, r_name, matrix_output_dir,
+                                     [sig_output_dir + '/' + r_name, cas_output_dir + '/' + r_name],
+                                     cas_hmm_to_index, cas=True)
+        
+        regions_cas_hmm_list.append(X_cas_hmm)
+
+        X_prop = build_protein_properties_matrix(r, f, r_name, matrix_output_dir)
 
         regions_prop_list.append(X_prop)
     
@@ -271,7 +309,7 @@ if __name__ == '__main__':
     ert_boundaries_list = []
     dnn_boundaries_list = []
 
-    for rdf, X_hmm in zip(regions_dataframes, regions_hmm_list):
+    for rdf, X_hmm in zip(regions_dataframes, regions_gen_hmm_list):
         i_signature = np.where(rdf['RefSignature'] == 'yes')[0][0]
         i_signature_rep = [i_signature] * X_hmm.shape[0]
         X_sig = X_hmm[i_signature_rep]
@@ -282,45 +320,54 @@ if __name__ == '__main__':
         y_pred_ert = clf_ert.predict(X_hmm_ert)
         ert_boundaries = find_boundaries(y_pred_ert, args.max_gap, i_signature)
         ert_boundaries_list.append(ert_boundaries)
-        print(ert_boundaries)
 
         X_hmm_dnn = scaler_dnn.transform(X_hmm)
         X_hmm_dnn = svd_dnn.transform(X_hmm_dnn)
         y_pred_dnn = clf_dnn.predict(X_hmm_dnn)
         dnn_boundaries = find_boundaries(y_pred_dnn, args.max_gap, i_signature)
         dnn_boundaries_list.append(dnn_boundaries)
-        print(dnn_boundaries)
-        print()
+    
+    print('Labeling Cas proteins.')
+    maxabs_scaler_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/MaxAbsScaler_hmm2019_prop.joblib')
+    minmax_scaler_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/MinMaxScaler_hmm2019_prop.joblib')
+    clf_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/ClassifierWrapper_hmm2019_prop.joblib')
 
-    # print('Labeling Cas proteins.')
-    # maxabs_scaler_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/MaxAbsScaler_hmm2019_prop.joblib')
-    # minmax_scaler_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/MinMaxScaler_hmm2019_prop.joblib')
-    # clf_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/ClassifierWrapper_hmm2019_prop.joblib')
+    maxabs_scaler_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/MaxAbsScaler_hmm2019_prop.joblib')
+    minmax_scaler_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/MinMaxScaler_hmm2019_prop.joblib')
+    clf_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/ClassifierWrapper_hmm2019_prop.joblib')
 
-    # maxabs_scaler_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/MaxAbsScaler_hmm2019_prop.joblib')
-    # minmax_scaler_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/MinMaxScaler_hmm2019_prop.joblib')
-    # clf_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/ClassifierWrapper_hmm2019_prop.joblib')
+    final_predictions_ert = []
+    final_predictions_dnn = []
 
-    # final_predictions_ert = []
-    # final_predictions_dnn = []
+    for i, (X_hmm, X_prop) in enumerate(zip(regions_cas_hmm_list, regions_prop_list)):
+        ert_start, ert_end = ert_boundaries_list[i]
+        dnn_start, dnn_end = dnn_boundaries_list[i]
+        
+        X_hmm = regions_cas_hmm_list[i].toarray()
+        X_prop = regions_prop_list[i]
 
-    # for i in range(len(regions_dataframes)):
-    #     X_hmm = regions_hmm_list[i].toarray()
-    #     X_prop = regions_prop_list[i]
+        start_ert, end_ert = ert_boundaries_list[i]
+        X_hmm_ert = X_hmm[start_ert:end_ert+1]
+        X_hmm_ert = maxabs_scaler_ert.transform(X_hmm_ert)
+        X_prop_ert = X_prop[start_ert:end_ert+1]
+        X_prop_ert = minmax_scaler_ert.transform(X_prop_ert)
+        X_ert = np.hstack((X_hmm_ert, X_prop_ert))
+        y_pred_ert = clf_ert.predict(X_ert)
+        rdf_ert = regions_dataframes[i].iloc[start_ert:end_ert+1]
+        rdf_ert = rdf_ert.assign(CasType=y_pred_ert)
+        print(rdf_ert)
 
-    #     start_ert, end_ert = ert_boundaries_list[i]
-    #     X_hmm_ert = X_hmm[start_ert:end_ert+1]
-    #     X_hmm_ert = maxabs_scaler_ert.transform(X_hmm_ert)
-    #     X_prop_ert = X_prop[start_ert:end_ert+1]
-    #     X_prop_ert = minmax_scaler_ert.transform(X_prop_ert)
-    #     X_ert = np.hstack((X_hmm_ert, X_prop_ert))
-    #     y_pred_ert = clf_ert.predict(X_ert)
+        start_dnn, end_dnn = dnn_boundaries_list[i]
+        X_hmm_dnn = X_hmm[start_dnn:end_dnn+1]
+        X_hmm_dnn = maxabs_scaler_dnn.transform(X_hmm_dnn)
+        X_prop_dnn = X_prop[start_dnn:end_dnn+1]
+        X_prop_dnn = minmax_scaler_dnn.transform(X_prop_dnn)
+        X_dnn = np.hstack((X_hmm_dnn, X_prop_dnn))
+        y_pred_dnn = clf_dnn.predict(X_dnn)
+        rdf_dnn = regions_dataframes[i].iloc[start_dnn:end_dnn+1]
+        rdf_dnn = rdf_dnn.assign(CasType=y_pred_dnn)
+        print(rdf_dnn)
 
-    #     start_dnn, end_dnn = dnn_boundaries_list[i]
-    #     X_hmm_dnn = X_hmm[start_dnn:end_dnn+1]
-    #     X_hmm_dnn = maxabs_scaler_dnn.transform(X_hmm_dnn)
-    #     X_prop_dnn = X_prop[start_dnn:end_dnn+1]
-    #     X_prop_dnn = minmax_scaler_dnn.transform(X_prop)
-    #     X_dnn = np.hstack((X_hmm_dnn, X_prop_dnn))
-    #     y_pred_dnn = clf_dnn.predict(X_dnn)
+        input()
+    
     
