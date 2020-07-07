@@ -26,6 +26,7 @@
 import os
 import glob
 import numpy as np
+import pandas as pd
 import joblib
 import warnings
 warnings.simplefilter('ignore')
@@ -194,31 +195,70 @@ def find_boundaries(y_pred, max_gap, i_sig):
     
     return last_left, last_right
 
-# def merge_cassettes(cassette_boundaries_list, min_common=3):
-#     stop = False
-#     remaining_cassettes = [set(range(c[0], c[1])) for c in cassette_boundaries_list]
-#     remaining_cassettes = sorted(remaining_cassettes, key=lambda c : -len(c))
+def filter_and_merge_cassettes(cassettes_list, min_common=3, min_genes=3):
+    stop = False
+    cassettes_list = sorted(cassettes_list, key=lambda c : c.shape[0])
+    merged = True
+    
+    while merged:
+        merged = False
+        merged_cassettes = []
 
-#     while not stop:
-#         stop = True
+        while cassettes_list:
+            c0 = cassettes_list.pop()
+            indices_to_merge = []
+
+            for i in reversed(range(len(cassettes_list))):
+                intersection = np.intersect1d(c0.index.values, cassettes_list[i].index.values)
+                if len(intersection) >= min(min_common, len(cassettes_list[i])):
+                    indices_to_merge.append(i)
+            
+            if indices_to_merge:
+                for i in indices_to_merge:
+                    c1 = cassettes_list.pop(i)
+                    c0 = pd.concat([c0, c1]).sort_values(by=['Start', 'RefSignature'], ascending=[True, False])
+                    c0 = c0.loc[~c0.index.duplicated(keep='first')]
+                
+                merged = True
+                cassettes_list.append(c0)
+            
+            elif c0.shape[0] >= min_genes and not np.all(c0['CasType'] == 'unknown'):
+                merged_cassettes.append(c0)
         
-#         while len(remaining_cassettes):
-#             c0 = remaining_cassettes.pop(0)
-#             indices_to_remove = []
+        cassettes_list = merged_cassettes
+    
+    return [c.sort_values(by='Start') for c in cassettes_list]
 
-#             for i, c1 in enumerate(remaining_cassettes):
-#                 if len(c0.intersection(c1)) >= min_common:
-#                     c0.update(c1)
-#                     indices_to_remove.append(i)
-            
-#             if len(indices_to_remove):
-#                 stop = False
+def decompose_into_modules(predictions_df_list):
+    for i, predictions in enumerate(predictions_df_list):
+        modules = np.repeat('interference', predictions.shape[0])
+        
+        adaptation = np.where((predictions['CasType'] == 'cas1') | \
+                              (predictions['CasType'] == 'cas2') | \
+                              (predictions['CasType'] == 'cas4'))[0]
+        
+        modules[adaptation] = 'adaptation'
 
-#                 for i in indices_to_remove[::-1]:
-#                     remaining_cassettes.remove(i)
-            
-#             merged_cassettes.append(c0)
-                            
+        processing = np.where(predictions['CasType'] == 'cas6')[0]
+        
+        modules[processing] = 'processing'
+
+        predictions_df_list[i] = predictions.assign(Module=modules)
+
+def write_final_predictions(cassette_pred_list, protein_sequences, output_dir, min_genes=3):
+    if not os.path.exists(output_dir):
+        os.mkdir(output_dir)
+    
+    cassette_pred_list = filter_and_merge_cassettes(cassette_pred_list)
+
+    for i, cassette_pred in enumerate(cassette_pred_list):
+        cassette_sequences = [protein_sequences[idx] for idx in cassette_pred.index]
+        cassette_pred.to_csv(output_dir + f'/cassette_{i+1}.csv')
+
+        out_path = output_dir + f'/cassette_{i+1}.fasta'
+        with open(out_path, 'w') as out_file:
+            for s in cassette_sequences:
+                out_file.write(s.format('fasta'))
 
 if __name__ == '__main__':
     from argparse import ArgumentParser
@@ -355,7 +395,7 @@ if __name__ == '__main__':
         y_pred_ert = clf_ert.predict(X_ert)
         rdf_ert = regions_dataframes[i].iloc[start_ert:end_ert+1]
         rdf_ert = rdf_ert.assign(CasType=y_pred_ert)
-        print(rdf_ert)
+        final_predictions_ert.append(rdf_ert)
 
         start_dnn, end_dnn = dnn_boundaries_list[i]
         X_hmm_dnn = X_hmm[start_dnn:end_dnn+1]
@@ -366,8 +406,16 @@ if __name__ == '__main__':
         y_pred_dnn = clf_dnn.predict(X_dnn)
         rdf_dnn = regions_dataframes[i].iloc[start_dnn:end_dnn+1]
         rdf_dnn = rdf_dnn.assign(CasType=y_pred_dnn)
-        print(rdf_dnn)
-
-        input()
+        final_predictions_dnn.append(rdf_dnn)
     
+    print('Merging and saving final predictions.')
+    with open(proteins_fasta_file, 'r') as file_:
+        all_sequences = SeqIO.to_dict(SeqIO.parse(file_, 'fasta'))
     
+    print('Decomposing into modules.')
+    decompose_into_modules(final_predictions_ert)
+    decompose_into_modules(final_predictions_dnn)
+    
+    print('Saving predictions.')
+    write_final_predictions(final_predictions_ert, all_sequences, args.output_dir + '/predictions_ERT')
+    write_final_predictions(final_predictions_dnn, all_sequences, args.output_dir + '/predictions_DNN')
