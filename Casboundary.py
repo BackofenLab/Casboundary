@@ -195,9 +195,10 @@ def find_boundaries(y_pred, max_gap, i_sig):
     
     return last_left, last_right
 
-def filter_and_merge_cassettes(cassettes_list, min_common=3, min_genes=3):
+def filter_and_merge_cassettes(cassettes_list, min_common=3, min_genes=3, max_unk=0.5):
     stop = False
-    cassettes_list = sorted(cassettes_list, key=lambda c : c.shape[0])
+    cassettes_list = [c for c in sorted(cassettes_list, key=lambda c : c.shape[0])
+                      if (c['CasType'] == 'unknown').sum() < int(c.shape[0] * max_unk)]
     merged = True
     
     while merged:
