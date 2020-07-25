@@ -106,28 +106,25 @@ def extract_regions_sequences(proteins_fasta_file, regions, output_dir):
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     
-    regions_fasta_files = []
-    
     with open(proteins_fasta_file, 'r') as file_:
         sequences = SeqIO.to_dict(SeqIO.parse(file_, 'fasta'))
-        
-    for i, r in enumerate(regions):
-        r_seqs = [sequences[prot_id] for prot_id in r.index]
-
-        out_path = output_dir + f'/region_{i+1}.fasta'
-        with open(out_path, 'w') as out_file:
-            for s in r_seqs:
-                out_file.write(s.format('fasta'))                         
-        
-        regions_fasta_files.append(out_path)
     
-    return regions_fasta_files
+    regions_prot_ids = [set(r.index) for r in regions]
+    proteins_ids_regions = set.union(*regions_prot_ids)
+    sequences = [sequences[prot_id] for prot_id in sorted(proteins_ids_regions)]
+    regions_fasta_file = output_dir + f'/regions_genes.fasta'
+    
+    with open(regions_fasta_file, 'w') as out_file:
+        for s in sequences:
+            out_file.write(s.format('fasta'))
+    
+    return regions_fasta_file
 
 def build_hmm_matrix(region, region_name, matrix_output_dir, hmmsearch_output_dirs, hmm_to_index, cas=False):
     prot_to_index = dict(zip(region.index, np.arange(region.shape[0])))
     hmm_results_files = sum((glob.glob(ho_dir + '/*.tab') for ho_dir in hmmsearch_output_dirs), [])
     X_hmm = sparse.dok_matrix((region.shape[0], len(hmm_to_index)), dtype=np.double)
-            
+
     for hmm_f in hmm_results_files:
         hmm = np.loadtxt(hmm_f, usecols=[0, 2, 5], dtype=np.str)
         
@@ -135,24 +132,25 @@ def build_hmm_matrix(region, region_name, matrix_output_dir, hmmsearch_output_di
             hmm = np.expand_dims(hmm, axis=0)
 
         for prot, model, bitscore in hmm:
-            i = prot_to_index[prot]
+            if prot in prot_to_index:
+                i = prot_to_index[prot]
 
-            if cas:
-                name = hmm_f.rsplit('/', 1)[1].replace('.tab', '')
-            else:
-                name = model
-            
-            j = hmm_to_index[name]
-            bitscore = float(bitscore)
-            X_hmm[i, j] = max(X_hmm[i, j], bitscore)
+                if cas:
+                    name = hmm_f.rsplit('/', 1)[1].replace('.tab', '')
+                else:
+                    name = model
+                
+                j = hmm_to_index[name]
+                bitscore = float(bitscore)
+                X_hmm[i, j] = max(X_hmm[i, j], bitscore)
         
     X_hmm = sparse.csr_matrix(X_hmm)
     sparse.save_npz(matrix_output_dir + '/' + region_name + '.npz', X_hmm, compressed=True)
     
     return X_hmm
 
-def build_protein_properties_matrix(region, region_fasta, region_name, matrix_output_dir):
-    with open(region_fasta, 'r') as file_:
+def build_protein_properties_matrix(region, regions_fasta, region_name, matrix_output_dir):
+    with open(regions_fasta, 'r') as file_:
         sequences = SeqIO.to_dict(SeqIO.parse(file_, 'fasta'))
     
     X_prop = []
@@ -298,8 +296,8 @@ if __name__ == '__main__':
                                                           args.output_dir, args.hmmsearch_output_dir,
                                                           args.n_cpus)
     
-    regions_fasta_files = extract_regions_sequences(proteins_fasta_file, regions_dataframes, args.output_dir)
-    
+    regions_fasta_file = extract_regions_sequences(proteins_fasta_file, regions_dataframes, args.output_dir)
+
     gen_output_dir = args.hmmsearch_output_dir + '/' + GEN_HMM_DIR
     gen_hmm_names = np.loadtxt(GEN_HMM_NAMES_FILE, dtype=np.str)
     gen_hmm_to_index = dict(zip(gen_hmm_names, np.arange(len(gen_hmm_names))))
@@ -308,6 +306,10 @@ if __name__ == '__main__':
     cas_output_dir = args.hmmsearch_output_dir + '/' + CAS_HMM_DIR
     cas_hmm_names = np.loadtxt(CAS_HMM_NAMES_FILE, dtype=np.str)
     cas_hmm_to_index = dict(zip(cas_hmm_names, np.arange(len(cas_hmm_names))))
+
+    print('Running hmmsearches.')
+    run_hmmsearch(regions_fasta_file, GEN_HMM_DIR, gen_output_dir, args.n_cpus, 1000, use_mp=False)
+    run_hmmsearch(regions_fasta_file, CAS_HMM_DIR, cas_output_dir, args.n_cpus, 1, use_mp=True)
     
     regions_gen_hmm_list = []
     regions_cas_hmm_list = []
@@ -315,28 +317,23 @@ if __name__ == '__main__':
     matrix_output_dir = args.output_dir + '/potential_regions'
     
     print('Extracting HMM features and protein properties features.')
-    for r, f in zip(regions_dataframes, regions_fasta_files):
-        r_name = f.rsplit('/', 1)[1].replace('.fasta', '')
-        run_hmmsearch(f, GEN_HMM_DIR, gen_output_dir + '/' + r_name, args.n_cpus, 1000, use_mp=False)
+    for i, r in enumerate(regions_dataframes):
+        r_name = f'region_{i+1}'
 
-        X_gen_hmm = build_hmm_matrix(r, r_name, matrix_output_dir,
-                                     [gen_output_dir + '/' + r_name],
-                                     gen_hmm_to_index)
-        
+        X_gen_hmm = build_hmm_matrix(r, r_name + '.gen', matrix_output_dir, [gen_output_dir], gen_hmm_to_index)
         regions_gen_hmm_list.append(X_gen_hmm)
 
-        run_hmmsearch(f, SIG_HMM_DIR, sig_output_dir + '/' + r_name, args.n_cpus, 1, use_mp=True)
-        run_hmmsearch(f, CAS_HMM_DIR, cas_output_dir + '/' + r_name, args.n_cpus, 1, use_mp=True)
-
-        X_cas_hmm = build_hmm_matrix(r, r_name, matrix_output_dir,
-                                     [sig_output_dir + '/' + r_name, cas_output_dir + '/' + r_name],
+        X_cas_hmm = build_hmm_matrix(r, r_name + '.cas', matrix_output_dir,
+                                     [sig_output_dir, cas_output_dir],
                                      cas_hmm_to_index, cas=True)
         
         regions_cas_hmm_list.append(X_cas_hmm)
 
-        X_prop = build_protein_properties_matrix(r, f, r_name, matrix_output_dir)
-
+        X_prop = build_protein_properties_matrix(r, regions_fasta_file, r_name, matrix_output_dir)
         regions_prop_list.append(X_prop)
+    
+    assert len(regions_dataframes) == len(regions_gen_hmm_list) == \
+           len(regions_cas_hmm_list) == len(regions_prop_list)
     
     print('Finding cassette boundaries.')
     scaler_ert = joblib.load(ML_MODELS_DIR + '/ert_bound/MaxAbsScaler_hmm.joblib')
