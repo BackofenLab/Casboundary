@@ -38,7 +38,7 @@ def run_prodigal(fasta_file, completeness, output_dir, prodigal_path='prodigal')
     prodigal = f'{prodigal_path} -i {fasta_file} -c -m -g 11 -p single -a {output_fasta_file} -q {meta}'
     
     with open(log_file, 'w') as logf:
-        sp.call(prodigal.split(), stdout=logf)
+        sp.call(prodigal.split(), stdout=output_dir + '/' + logf)
     
     return output_fasta_file
 
