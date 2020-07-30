@@ -31,14 +31,14 @@ from collections import defaultdict
 from Bio import SeqIO
 
 def run_prodigal(fasta_file, completeness, output_dir, prodigal_path='prodigal'):
-    meta = '-p meta' if completeness == 'partial' else ''
+    meta = ' -p meta' if completeness == 'partial' else ''
     fasta_file_preffix = fasta_file.split('/')[-1].rsplit('.', 1)[0]
     output_fasta_file = output_dir + '/' + fasta_file_preffix + '_proteins.fasta'
-    log_file = fasta_file_preffix + '.prodigal.log'
-    prodigal = f'{prodigal_path} -i {fasta_file} -c -m -g 11 -p single -a {output_fasta_file} -q {meta}'
+    log_file = output_dir + '/' + fasta_file_preffix + '.prodigal.log'
+    prodigal = f'{prodigal_path} -i {fasta_file} -c -m -g 11 -a {output_fasta_file} -q {meta}'
     
     with open(log_file, 'w') as logf:
-        sp.call(prodigal.split(), stdout=output_dir + '/' + logf)
+        sp.call(prodigal.split(), stdout=logf)
     
     return output_fasta_file
 
