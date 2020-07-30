@@ -98,7 +98,7 @@ def find_signatures(hmmsearch_output_dir):
         
         signatures.update(prot for prot, _, _ in hmm_results)
     
-    return sorted(signatures)
+    return sorted(signatures, key=lambda s : (len(s), s))
 
 def extract_regions_sequences(proteins_fasta_file, regions, output_dir):
     output_dir = output_dir + '/potential_regions'
@@ -111,7 +111,7 @@ def extract_regions_sequences(proteins_fasta_file, regions, output_dir):
     
     regions_prot_ids = [set(r.index) for r in regions]
     proteins_ids_regions = set.union(*regions_prot_ids)
-    sequences = [sequences[prot_id] for prot_id in sorted(proteins_ids_regions)]
+    sequences = [sequences[prot_id] for prot_id in sorted(proteins_ids_regions, key=lambda s : (len(s), s))]
     regions_fasta_file = output_dir + f'/regions_genes.fasta'
     
     with open(regions_fasta_file, 'w') as out_file:
@@ -193,10 +193,9 @@ def find_boundaries(y_pred, max_gap, i_sig):
     
     return last_left, last_right
 
-def filter_and_merge_cassettes(cassettes_list, min_common=3, min_genes=3, max_unk=0.5):
-    stop = False
-    cassettes_list = [c for c in sorted(cassettes_list, key=lambda c : c.shape[0])
-                      if (c['CasType'] == 'unknown').sum() < int(c.shape[0] * max_unk)]
+def filter_and_merge_cassettes(cassettes_list, min_genes=3, max_unk=0.5, max_overlap=0.7):
+    cassettes_list = [c for c in sorted(cassettes_list, key=lambda c : -c.shape[0])
+                      if (c['CasType'] == 'unknown').sum() <= int(c.shape[0] * max_unk)]
     merged = True
     
     while merged:
@@ -209,7 +208,9 @@ def filter_and_merge_cassettes(cassettes_list, min_common=3, min_genes=3, max_un
 
             for i in reversed(range(len(cassettes_list))):
                 intersection = np.intersect1d(c0.index.values, cassettes_list[i].index.values)
-                if len(intersection) >= min(min_common, len(cassettes_list[i])):
+                intersection = len(intersection) / min(len(c0.index.values), len(cassettes_list[i].index.values))
+
+                if intersection >= max_overlap:
                     indices_to_merge.append(i)
             
             if indices_to_merge:
@@ -227,6 +228,26 @@ def filter_and_merge_cassettes(cassettes_list, min_common=3, min_genes=3, max_un
         cassettes_list = merged_cassettes
     
     return [c.sort_values(by='Start') for c in cassettes_list]
+
+def label_best_hmm_hits(region, hmmsearch_output_dirs):
+    labels = {idx : ('unknown', 0.0) for idx in region.index}
+    
+    for hmm_dir in hmmsearch_output_dirs:
+        files = glob.glob('hmm_dir/*.tab')
+
+        for hmm_f in files:
+            hmm = np.loadtxt(hmm_f, usecols=[0, 2, 5], dtype=np.str)
+            
+            if len(hmm) and len(hmm.shape) == 1:
+                hmm = np.expand_dims(hmm, axis=0)
+
+            for prot, model, bitscore in hmm:
+                if prot in labels:
+                    if bitscore > labels[prot][1]:
+                        cas = hmm_f.split('/')[-1].split('.')[0].split('_')[0].split('gr')[0].lower()
+                        labels[prot] = (cas, bitscore)
+    
+    return labels
 
 def decompose_into_modules(predictions_df_list):
     for i, predictions in enumerate(predictions_df_list):
@@ -268,6 +289,7 @@ if __name__ == '__main__':
     parser.add_argument('-o', '--output-directory', nargs='?', dest='output_dir', help='Output directory path.', metavar='output_dir', default='.', type=str)
     parser.add_argument('-n', '--number-of-cpus', nargs='?', dest='n_cpus', help='Number of CPUs to use.', default=1, type=int)
     parser.add_argument('-g', '--maximum-gap', nargs='?', dest='max_gap', help='Maximum number of contiguous gaps allowed in a cassette (default: 1).', type=int, choices=range(6), default=1)
+    parser.add_argument('-m', '--model', nargs='?', dest='model', choices=['ert', 'dnn', 'ERT', 'DNN'], default='ert')
     parser.add_argument('-ho', '--hmmsearch-output-dir', nargs='?', dest='hmmsearch_output_dir', help='Hmmsearch output directory path.', metavar='hmmsearch_output_dir', default='./hmmsearch_output', type=str)
     args = parser.parse_args()
 
@@ -336,84 +358,98 @@ if __name__ == '__main__':
            len(regions_cas_hmm_list) == len(regions_prop_list)
     
     print('Finding cassette boundaries.')
-    scaler_ert = joblib.load(ML_MODELS_DIR + '/ert_bound/MaxAbsScaler_hmm.joblib')
-    svd_ert = joblib.load(ML_MODELS_DIR + '/ert_bound/TruncatedSVD_hmm.joblib')
-    clf_ert = joblib.load(ML_MODELS_DIR + '/ert_bound/ExtraTreesClassifier_hmm.joblib')
 
-    scaler_dnn = joblib.load(ML_MODELS_DIR + '/dnn_bound/MaxAbsScaler_hmm.joblib')
-    svd_dnn = joblib.load(ML_MODELS_DIR + '/dnn_bound/TruncatedSVD_hmm.joblib')
-    clf_dnn = joblib.load(ML_MODELS_DIR + '/dnn_bound/MLPClassifier_hmm.joblib')
+    if args.model == 'ert':
+        model_scaler = joblib.load(ML_MODELS_DIR + '/ert_bound/MaxAbsScaler_hmm.joblib')
+        model_svd = joblib.load(ML_MODELS_DIR + '/ert_bound/TruncatedSVD_hmm.joblib')
+        model_clf = joblib.load(ML_MODELS_DIR + '/ert_bound/ExtraTreesClassifier_hmm.joblib')
+    else:
+        model_scaler = joblib.load(ML_MODELS_DIR + '/dnn_bound/MaxAbsScaler_hmm.joblib')
+        model_svd = joblib.load(ML_MODELS_DIR + '/dnn_bound/TruncatedSVD_hmm.joblib')
+        model_clf = joblib.load(ML_MODELS_DIR + '/dnn_bound/MLPClassifier_hmm.joblib')
 
-    ert_boundaries_list = []
-    dnn_boundaries_list = []
+    boundaries_list = []
+    regions_dataframes_to_keep = []
+    idx_to_remove = set()
 
-    for rdf, X_hmm in zip(regions_dataframes, regions_gen_hmm_list):
-        i_signature = np.where(rdf['RefSignature'] == 'yes')[0][0]
-        i_signature_rep = [i_signature] * X_hmm.shape[0]
-        X_sig = X_hmm[i_signature_rep]
-        X_hmm = sparse.hstack((X_sig, X_hmm))
+    for k, (rdf, X_hmm) in enumerate(zip(regions_dataframes, regions_gen_hmm_list)):
+        i_signature = np.where(rdf['RefSignature'] == 'yes')[0]
+        assert len(i_signature) == 1
+        i_signature = i_signature[0]
+        signature_id = rdf.index[i_signature]
 
-        X_hmm_ert = scaler_ert.transform(X_hmm)
-        X_hmm_ert = svd_ert.transform(X_hmm_ert)
-        y_pred_ert = clf_ert.predict(X_hmm_ert)
-        ert_boundaries = find_boundaries(y_pred_ert, args.max_gap, i_signature)
-        ert_boundaries_list.append(ert_boundaries)
+        run = True
+        for l in range(len(regions_dataframes_to_keep)):
+            s, e = boundaries_list[l]
+            if signature_id in regions_dataframes_to_keep[l].index[s:e+1]:
+                idx_to_remove.add(k)
+                run = False
+                break
 
-        X_hmm_dnn = scaler_dnn.transform(X_hmm)
-        X_hmm_dnn = svd_dnn.transform(X_hmm_dnn)
-        y_pred_dnn = clf_dnn.predict(X_hmm_dnn)
-        dnn_boundaries = find_boundaries(y_pred_dnn, args.max_gap, i_signature)
-        dnn_boundaries_list.append(dnn_boundaries)
+        if run:
+            i_signature_rep = [i_signature] * X_hmm.shape[0]
+            X_sig = X_hmm[i_signature_rep]
+            X_hmm = sparse.hstack((X_sig, X_hmm))
+
+            X_hmm = model_scaler.transform(X_hmm)
+            X_hmm = model_svd.transform(X_hmm)
+            y_pred = model_clf.predict(X_hmm)
+            boundaries = find_boundaries(y_pred, args.max_gap, i_signature)
+            boundaries_list.append(boundaries)
+            print(f'Running for {signature_id}: {boundaries}')
+            regions_dataframes_to_keep.append(rdf)          
+
+    regions_dataframes = regions_dataframes_to_keep
+    regions_cas_hmm_list = [x for k, x in enumerate(regions_cas_hmm_list) if not (k in idx_to_remove)]
+    regions_prop_list = [x for k, x in enumerate(regions_prop_list) if not (k in idx_to_remove)]
+
+    assert len(regions_dataframes) == len(regions_cas_hmm_list) == len(regions_prop_list)
     
     print('Labeling Cas proteins.')
-    maxabs_scaler_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/MaxAbsScaler_hmm2019_prop.joblib')
-    minmax_scaler_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/MinMaxScaler_hmm2019_prop.joblib')
-    clf_ert = joblib.load(ML_MODELS_DIR + '/ert_prot/ClassifierWrapper_hmm2019_prop.joblib')
 
-    maxabs_scaler_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/MaxAbsScaler_hmm2019_prop.joblib')
-    minmax_scaler_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/MinMaxScaler_hmm2019_prop.joblib')
-    clf_dnn = joblib.load(ML_MODELS_DIR + '/dnn_prot/ClassifierWrapper_hmm2019_prop.joblib')
+    if args.model == 'ert':
+        model_maxabs_scaler = joblib.load(ML_MODELS_DIR + '/ert_prot/MaxAbsScaler_hmm2019_prop.joblib')
+        model_minmax_scaler = joblib.load(ML_MODELS_DIR + '/ert_prot/MinMaxScaler_hmm2019_prop.joblib')
+        model_protein_clf = joblib.load(ML_MODELS_DIR + '/ert_prot/ClassifierWrapper_hmm2019_prop.joblib')
+    else:
+        model_maxabs_scaler = joblib.load(ML_MODELS_DIR + '/dnn_prot/MaxAbsScaler_hmm2019_prop.joblib')
+        model_minmax_scaler = joblib.load(ML_MODELS_DIR + '/dnn_prot/MinMaxScaler_hmm2019_prop.joblib')
+        model_protein_clf = joblib.load(ML_MODELS_DIR + '/dnn_prot/ClassifierWrapper_hmm2019_prop.joblib')
 
-    final_predictions_ert = []
-    final_predictions_dnn = []
+    final_predictions = []
 
-    for i, (X_hmm, X_prop) in enumerate(zip(regions_cas_hmm_list, regions_prop_list)):
-        ert_start, ert_end = ert_boundaries_list[i]
-        dnn_start, dnn_end = dnn_boundaries_list[i]
-        
+    for i, (reg_df, X_hmm, X_prop) in enumerate(zip(regions_dataframes, regions_cas_hmm_list, regions_prop_list)):
+        start, end = boundaries_list[i]
+        reg_df = reg_df.iloc[start:end+1]
+        hmm_labels = label_best_hmm_hits(reg_df, [cas_output_dir, sig_output_dir])
+
         X_hmm = regions_cas_hmm_list[i].toarray()
         X_prop = regions_prop_list[i]
 
-        start_ert, end_ert = ert_boundaries_list[i]
-        X_hmm_ert = X_hmm[start_ert:end_ert+1]
-        X_hmm_ert = maxabs_scaler_ert.transform(X_hmm_ert)
-        X_prop_ert = X_prop[start_ert:end_ert+1]
-        X_prop_ert = minmax_scaler_ert.transform(X_prop_ert)
-        X_ert = np.hstack((X_hmm_ert, X_prop_ert))
-        y_pred_ert = clf_ert.predict(X_ert)
-        rdf_ert = regions_dataframes[i].iloc[start_ert:end_ert+1]
-        rdf_ert = rdf_ert.assign(CasType=y_pred_ert)
-        final_predictions_ert.append(rdf_ert)
+        X_hmm = X_hmm[start:end+1]
+        X_hmm = model_maxabs_scaler.transform(X_hmm)
+        X_prop = X_prop[start:end+1]
+        X_prop = model_minmax_scaler.transform(X_prop)
+        X = np.hstack((X_hmm, X_prop))
+        y_pred = model_protein_clf.predict(X)
 
-        start_dnn, end_dnn = dnn_boundaries_list[i]
-        X_hmm_dnn = X_hmm[start_dnn:end_dnn+1]
-        X_hmm_dnn = maxabs_scaler_dnn.transform(X_hmm_dnn)
-        X_prop_dnn = X_prop[start_dnn:end_dnn+1]
-        X_prop_dnn = minmax_scaler_dnn.transform(X_prop_dnn)
-        X_dnn = np.hstack((X_hmm_dnn, X_prop_dnn))
-        y_pred_dnn = clf_dnn.predict(X_dnn)
-        rdf_dnn = regions_dataframes[i].iloc[start_dnn:end_dnn+1]
-        rdf_dnn = rdf_dnn.assign(CasType=y_pred_dnn)
-        final_predictions_dnn.append(rdf_dnn)
-    
+        consensus = []
+        for k in range(len(reg_df)):
+            if y_pred[k] != 'unknown' and hmm_labels[reg_df.index[k]][0] == 'unknown':
+                consensus.append(y_pred[k])
+            else:
+                consensus.append(hmm_labels[reg_df.index[k]][0])
+
+        rdf = regions_dataframes[i].iloc[start:end+1]
+        rdf = rdf.assign(CasType=consensus)
+        final_predictions.append(rdf)
+
     print('Merging and saving final predictions.')
     with open(proteins_fasta_file, 'r') as file_:
         all_sequences = SeqIO.to_dict(SeqIO.parse(file_, 'fasta'))
     
     print('Decomposing into modules.')
-    decompose_into_modules(final_predictions_ert)
-    decompose_into_modules(final_predictions_dnn)
+    decompose_into_modules(final_predictions)
     
     print('Saving predictions.')
-    write_final_predictions(final_predictions_ert, all_sequences, args.output_dir + '/predictions_ERT')
-    write_final_predictions(final_predictions_dnn, all_sequences, args.output_dir + '/predictions_DNN')
+    write_final_predictions(final_predictions, all_sequences, args.output_dir + '/predictions')
