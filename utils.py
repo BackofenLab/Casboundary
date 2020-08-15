@@ -24,6 +24,7 @@
 """
 
 import tarfile
+import os
 
 def extract_targz(targz_file_path):
     if not os.path.exists(targz_file_path):

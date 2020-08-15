@@ -21,7 +21,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-FROM ubuntu:20.04
+FROM ubuntu:18.04
 LABEL maintainer="Victor A. Padilha <victorpadilha@usp.br>"
 SHELL ["/bin/bash", "-c"]
 
@@ -51,7 +51,7 @@ RUN conda clean --all --yes \
     && find ~/miniconda3/ -follow -type f -name '*.pyc' -delete \
     && find ~/miniconda3/ -follow -type f -name '*.js.map' -delete
 RUN rm casboundary-env.yml
-RUN echo "source ~/miniconda3/etc/profile.d/conda.sh && conda activate casboundary-env.yml" >> ~/.bashrc
+RUN echo "source ~/miniconda3/etc/profile.d/conda.sh && conda activate casboundary-env" >> ~/.bashrc
 
 # creating Casboundary's folder and setting it as workdir
 RUN mkdir Casboundary
