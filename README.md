@@ -1,8 +1,8 @@
 # Casboundary
 
-Casboundary is the first method able to automatically define CRISPR cassette boundaries. In addition, it contains a Cas type predictive model used to assign each gene located in the region defined by a cassette’s boundaries a Cas label from a set of pre-defined Cas types.  Furthermore, the proposed method can detect potentially new cas genes and decompose a cassette into its modules.
+Casboundary is the first method able to automatically define CRISPR cassette boundaries. In addition, it contains a Cas type predictive model used to assign each gene located in the region defined by a cassette’s boundaries a Cas label from a set of pre-defined Cas types. Furthermore, the proposed method can detect potentially new cas genes and decompose a cassette into its modules.
 
-Casboundary can be easily integrated with [CRISPRcasIdentifier](https://github.com/BackofenLab/CRISPRcasIdentifier), a recent tool for the classification of CRISPRcassettes. Casboundary outputs a set of Fasta files containing the identifiedcassettes, which can be given as input to CRISPRcasIdentifier. Byintegrating these tools, the users have a complete CRISPR detection and classification pipeline.
+Casboundary can be easily integrated with [CRISPRcasIdentifier](https://github.com/BackofenLab/CRISPRcasIdentifier), a recent tool for the classification of CRISPRcassettes. Casboundary outputs a set of Fasta files containing the identified cassettes, which can be given as input to CRISPRcasIdentifier. By integrating these tools, the users have a complete CRISPR detection and classification pipeline.
 
 ## Citation
 
@@ -110,7 +110,7 @@ The available options are:
 
 * `-c` : sequence completeness. Available options: `complete` or `partial` (default: `complete`).
 
-* `-o` : output directory path. (default: `./`).
+* `-o` : output directory path. (default: `./casboundary_output`).
 
 * `-n` : number of CPUs to use (default: 1).
 
@@ -122,9 +122,11 @@ The available options are:
 
 ## Examples
 
-We provide three simple examples in the `examples` folder:
+We provide two simple examples in the `examples` folder:
 
-TODO
+* `NC_000961.fasta`, which must be run as `python Casboundary.py -f examples/NC_000961.fasta -c complete`
+
+* `NC_017104.fasta`, which must be run as `python Casboundary.py -f examples/NC_017104.fasta -c complete`
 
 ## License (GPLv3)
 
