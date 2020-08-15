@@ -1,0 +1,44 @@
+name: casboundary-env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - _libgcc_mutex=0.1=conda_forge
+  - _openmp_mutex=4.5=1_gnu
+  - biopython=1.76=py37h516909a_0
+  - ca-certificates=2020.6.20=hecda079_0
+  - certifi=2020.6.20=py37hc8dfbb8_0
+  - hmmer=3.3=he1b5a44_1
+  - joblib=0.14.1=pyh9f0ad1d_0
+  - ld_impl_linux-64=2.34=hc38a660_9
+  - libblas=3.8.0=17_openblas
+  - libcblas=3.8.0=17_openblas
+  - libffi=3.3=he6710b0_2
+  - libgcc-ng=9.3.0=h24d8f2e_15
+  - libgfortran-ng=7.5.0=hdf63c60_15
+  - libgomp=9.3.0=h24d8f2e_15
+  - liblapack=3.8.0=17_openblas
+  - libopenblas=0.3.10=pthreads_hb3c22a3_4
+  - libstdcxx-ng=9.3.0=hdf63c60_15
+  - ncurses=6.2=he1b5a44_1
+  - numpy=1.18.1=py37h8960a57_1
+  - openssl=1.1.1g=h516909a_1
+  - pandas=1.0.3=py37h0da4684_1
+  - pip=20.2.2=py_0
+  - prodigal=2.6.3=h516909a_2
+  - python=3.7.7=hcff3b4d_5
+  - python-dateutil=2.8.1=py_0
+  - python_abi=3.7=1_cp37m
+  - pytz=2020.1=pyh9f0ad1d_0
+  - readline=8.0=he28a2e2_2
+  - scikit-learn=0.22.1=py37hcdab131_1
+  - scipy=1.4.1=py37ha3d9a3c_3
+  - setuptools=49.6.0=py37hc8dfbb8_0
+  - six=1.15.0=pyh9f0ad1d_0
+  - sqlite=3.32.3=h4cf870e_1
+  - tk=8.6.10=hed695b0_0
+  - wheel=0.35.1=pyh9f0ad1d_0
+  - xz=5.2.5=h516909a_1
+  - zlib=1.2.11=h516909a_1007
+prefix: /home/padilha/miniconda3/envs/casboundary-env

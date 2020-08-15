@@ -396,7 +396,6 @@ if __name__ == '__main__':
             y_pred = model_clf.predict(X_hmm)
             boundaries = find_boundaries(y_pred, args.max_gap, i_signature)
             boundaries_list.append(boundaries)
-            print(f'Running for {signature_id}: {boundaries}')
             regions_dataframes_to_keep.append(rdf)          
 
     regions_dataframes = regions_dataframes_to_keep
