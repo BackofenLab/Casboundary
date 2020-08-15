@@ -112,7 +112,7 @@ The available options are:
 
 * `-o` : output directory path. (default: `./casboundary_output`).
 
-* `-n` : number of CPUs to use (default: 1).
+* `-n` : number of CPUs to use for hmmsearch (default: 1).
 
 * `-g` : maximum number of contiguous gaps allowed in a cassette (default: 1).
 
@@ -120,13 +120,19 @@ The available options are:
 
 * `-ho` : Hmmsearch output directory path (default: `./hmmsearch_output`).
 
+It is also possible to draw the found cassettes. For such, you can use the following command:
+
+    python draw_cassettes.py /path/to/cassette/predictions
+
 ## Examples
 
 We provide two simple examples in the `examples` folder:
 
-* `NC_000961.fasta`, which must be run as `python Casboundary.py -f examples/NC_000961.fasta -c complete`
+* `NC_000961.fasta`, which must be run as: `python Casboundary.py -f examples/NC_000961.fasta -c complete`.
 
-* `NC_017104.fasta`, which must be run as `python Casboundary.py -f examples/NC_017104.fasta -c complete`
+* `NC_017104.fasta`, which must be run as: `python Casboundary.py -f examples/NC_017104.fasta -c complete`
+
+* The found cassettes for any of the commands above can be plot by running: `python draw_cassettes.py ./casboundary_output/predictions`
 
 ## License (GPLv3)
 
