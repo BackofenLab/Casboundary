@@ -22,10 +22,10 @@ git clone git@github.com:BackofenLab/Casboundary.git
 
 Due to GitHub's file size constraints, we made our HMM and ML models available in Google Drive. You can download them from the following links:
 
-* [Machine Learning Models](https://drive.google.com/file/d/1gwytpbm1AgFXbt9jM7kcOxcuc74zZ3K5/view?usp=sharing)
-* [General HMM Models](https://drive.google.com/file/d/1Gi32Z3NSUMHy6Vc6jidh0H3Xzm_sNDYQ/view?usp=sharing)
-* [Signature HMM Models](https://drive.google.com/file/d/1I0f_5ErRmeTKnhGkNIJtrPJQlV4YEItK/view?usp=sharing)
-* [Cas HMM Models](https://drive.google.com/file/d/1A3aOziWtJAQ4GIueHhDYdvcuRBf4D6jS/view?usp=sharing)
+* [Machine Learning Models](https://drive.google.com/file/d/1SkyS03hQG0P7bO7KvaQXgQ_J2Vfng85K/view?usp=sharing)
+* [General HMM Models](https://drive.google.com/file/d/1yZ3rl0LPIk-LDLKl2KHb3ra5O2h9_jpA/view?usp=sharing)
+* [Signature HMM Models](https://drive.google.com/file/d/1ZMq_VanD1LcchMgOUXF2Db7HkozgHsWF/view?usp=sharing)
+* [Cas HMM Models](https://drive.google.com/file/d/1ex8deCpvAeK2S_typoBZ0sGMzI1X7_75/view?usp=sharing)
 
 Save all tar.gz files inside Casboundary's folder. It is not necessary to extract them, since the tool will do that the first time it is run.
 
