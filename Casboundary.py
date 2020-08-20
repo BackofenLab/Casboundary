@@ -233,7 +233,7 @@ def label_best_hmm_hits(region, hmmsearch_output_dirs):
     labels = {idx : ('unknown', 0.0) for idx in region.index}
     
     for hmm_dir in hmmsearch_output_dirs:
-        files = glob.glob('hmm_dir/*.tab')
+        files = glob.glob(f'{hmm_dir}/*.tab')
 
         for hmm_f in files:
             hmm = np.loadtxt(hmm_f, usecols=[0, 2, 5], dtype=np.str)
@@ -243,6 +243,7 @@ def label_best_hmm_hits(region, hmmsearch_output_dirs):
 
             for prot, model, bitscore in hmm:
                 if prot in labels:
+                    bitscore = float(bitscore)
                     if bitscore > labels[prot][1]:
                         cas = hmm_f.split('/')[-1].split('.')[0].split('_')[0].split('gr')[0].lower()
                         labels[prot] = (cas, bitscore)
