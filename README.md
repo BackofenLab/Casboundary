@@ -135,8 +135,7 @@ We provide two simple examples in the `examples` folder:
 * The found cassettes for any of the commands above can be plot by running: `python draw_cassettes.py ./casboundary_output/predictions`
 
 * The fasta files generated in the output path in the `predictions` directory can be given as input to [CRISPRcasIdentifier](https://github.com/BackofenLab/CRISPRcasIdentifier). For example:
-
-    python CRISPRcasIdentifier.py -f /path/to/cassette/predictions/cassette_1.fasta
+`python CRISPRcasIdentifier.py -f ./casboundary_output/predictions/cassette_1.fasta`
 
 ## License (GPLv3)
 
