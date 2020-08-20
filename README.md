@@ -2,15 +2,15 @@
 
 Casboundary is the first method able to automatically define CRISPR cassette boundaries. In addition, it contains a Cas type predictive model used to assign each gene located in the region defined by a cassette’s boundaries a Cas label from a set of pre-defined Cas types. Furthermore, the proposed method can detect potentially new cas genes and decompose a cassette into its modules.
 
-Casboundary can be easily integrated with [CRISPRcasIdentifier](https://github.com/BackofenLab/CRISPRcasIdentifier), a recent tool for the classification of CRISPRcassettes. Casboundary outputs a set of Fasta files containing the identified cassettes, which can be given as input to CRISPRcasIdentifier. By integrating these tools, the users have a complete CRISPR detection and classification pipeline.
+Casboundary can be easily integrated with [CRISPRcasIdentifier](https://github.com/BackofenLab/CRISPRcasIdentifier), a recent tool for the classification of CRISPR cassettes. Casboundary outputs a set of Fasta files containing the identified cassettes, which can be given as input to CRISPRcasIdentifier. By integrating these tools, the users have a complete CRISPR detection and classification pipeline.
 
 ## Citation
 
-TO DO
+To be added.
 
 ## Installation and requirements
 
-CRISPRcasIdentifier has been tested with Python 3.7.7. To run it, we recommend installing the same library versions we used. Since we exported our classifiers following the [model persistence guideline from scikit-learn](https://scikit-learn.org/stable/modules/model_persistence.html), it is not guaranteed that they will work properly if loaded using other Python and/or library versions. For such, we recommend the use of our docker image or a conda virtual environment. They make it easy to install the correct Python and library dependencies without affecting the whole operating system (see below).
+Casboundary has been tested with Python 3.7.7. To run it, we recommend installing the same library versions we used. Since we exported our classifiers following the [model persistence guideline from scikit-learn](https://scikit-learn.org/stable/modules/model_persistence.html), it is not guaranteed that they will work properly if loaded using other Python and/or library versions. For such, we recommend the use of our docker image or a conda virtual environment. They make it easy to install the correct Python and library dependencies without affecting the whole operating system (see below).
 
 ### First step: clone this repository
 
@@ -116,7 +116,7 @@ The available options are:
 
 * `-g` : maximum number of contiguous gaps allowed in a cassette (default: 1).
 
-* `-m model1` : which ML models to use. Available options: `ERT` or `DNN` (default: `ERT`).
+* `-m` : which ML models to use. Available options: `ERT` or `DNN` (default: `ERT`).
 
 * `-ho` : Hmmsearch output directory path (default: `./hmmsearch_output`).
 
