@@ -24,8 +24,8 @@ Due to GitHub's file size constraints, we made our HMM and ML models available i
 
 * [Machine Learning Models](https://drive.google.com/file/d/1SkyS03hQG0P7bO7KvaQXgQ_J2Vfng85K/view?usp=sharing)
 * [General HMM Models](https://drive.google.com/file/d/1yZ3rl0LPIk-LDLKl2KHb3ra5O2h9_jpA/view?usp=sharing)
-* [Signature HMM Models](https://drive.google.com/file/d/1ZMq_VanD1LcchMgOUXF2Db7HkozgHsWF/view?usp=sharing)
-* [Cas HMM Models](https://drive.google.com/file/d/1ex8deCpvAeK2S_typoBZ0sGMzI1X7_75/view?usp=sharing)
+* [Signature HMM Models](https://drive.google.com/file/d/1itiqV8djmrfwgwsByZLGe9olv7Uri5hV/view?usp=sharing)
+* [Cas HMM Models](https://drive.google.com/file/d/1zRJNlgqAC6A8BEDXPNKmtN4AfnVhjJIR/view?usp=sharing)
 
 Save all tar.gz files inside Casboundary's folder. It is not necessary to extract them, since the tool will do that the first time it is run.
 
