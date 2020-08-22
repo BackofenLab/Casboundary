@@ -41,6 +41,7 @@ from hmmer import run_hmmsearch
 from utils import extract_targz
 from protein_features import get_protein_features
 from wrapper import ClassifierWrapper
+from draw import draw_CRISPR_proteins
 
 CAS_HMM_TAR_PATH = 'Cas_HMM.tar.gz'
 SIG_HMM_TAR_PATH = 'Sig_HMM.tar.gz'
@@ -252,17 +253,18 @@ def label_best_hmm_hits(region, hmmsearch_output_dirs):
 
 def decompose_into_modules(predictions_df_list):
     for i, predictions in enumerate(predictions_df_list):
-        modules = np.repeat('interference', predictions.shape[0])
+        modules = np.repeat('interference', predictions.shape[0]).astype('<U13')
         
         adaptation = np.where((predictions['CasType'] == 'cas1') | \
                               (predictions['CasType'] == 'cas2') | \
                               (predictions['CasType'] == 'cas4'))[0]
-        
         modules[adaptation] = 'adaptation'
 
         processing = np.where(predictions['CasType'] == 'cas6')[0]
-        
         modules[processing] = 'processing'
+
+        potential_cas = np.where(predictions['CasType'] == 'unknown')[0]
+        modules[potential_cas] = 'potential_cas'
 
         predictions_df_list[i] = predictions.assign(Module=modules)
 
@@ -292,6 +294,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--maximum-gap', nargs='?', dest='max_gap', help='Maximum number of contiguous gaps allowed in a cassette. Available options: 0 <= gap <= 3 (default: 1).', type=int, choices=range(4), default=1)
     parser.add_argument('-m', '--model', nargs='?', dest='model', help='Which ML model will be used. Available obtions: ert and dnn (default: ert).', choices=['ert', 'dnn', 'ERT', 'DNN'], default='ert')
     parser.add_argument('-ho', '--hmmsearch-output-dir', nargs='?', dest='hmmsearch_output_dir', help='Hmmsearch output directory path.', metavar='hmmsearch_output_dir', default='./hmmsearch_output', type=str)
+    parser.add_argument('-d', '--draw-cassettes', dest='draw_cassettes', action='store_true', help='Whether to draw the found cassettes.')
     args = parser.parse_args()
 
     if not os.path.exists(args.fasta_file):
@@ -452,4 +455,12 @@ if __name__ == '__main__':
     decompose_into_modules(final_predictions)
     
     print('Saving predictions.')
-    write_final_predictions(final_predictions, all_sequences, args.output_dir + '/predictions')
+    cassettes_dir = args.output_dir + '/predictions'
+    write_final_predictions(final_predictions, all_sequences, cassettes_dir)
+
+    if args.draw_cassettes:
+        print('Drawing cassettes.')
+        files = glob.glob(cassettes_dir + '/*.csv')
+
+        for f in files:
+            draw_CRISPR_proteins(f)

@@ -46,7 +46,8 @@ def draw_protein_arrow(ax, x, y, start, end, width, cas_name, strand, font_size_
     ax.text(x,y + width - 0.6,str(start), color= 'black',ha='left', fontsize = font_size_small)
     ax.text(x + width,y - width - 0.6,str(end), color= 'black',ha='right', fontsize = font_size_small)
 
-def draw_CRISPR_proteins(filename, dataframe):
+def draw_CRISPR_proteins(filename):
+    dataframe = pd.read_csv(filename, header=0, index_col=0)
     n = dataframe.shape[0]
     axis = 3.2*n
     x = 0.7
@@ -101,19 +102,3 @@ def draw_CRISPR_proteins(filename, dataframe):
     print('Saving', out_filename)
     fig.savefig(out_filename, dpi = dpi)
     plt.close(fig)
-
-
-if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        _, cassettes_dir = sys.argv
-
-        files = glob.glob(cassettes_dir + '/*.csv')
-
-        for f in files:
-            df = pd.read_csv(f, header=0, index_col=0)
-            draw_CRISPR_proteins(f, df)
-    else:
-        print('Wrong number of arguments.')
-        print('How to run: python draw_cassettes.py path/to/cassettes_dir')
-        print('Figures will be saved in the same directory as the cassettes given as input.')
-

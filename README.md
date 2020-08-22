@@ -120,9 +120,7 @@ The available options are:
 
 * `-ho` : Hmmsearch output directory path (default: `./hmmsearch_output`).
 
-It is also possible to draw the found cassettes. For such, you can use the following command:
-
-    python draw_cassettes.py /path/to/cassette/predictions
+* `-d` : draws the found cassettes.
 
 ## Examples
 
@@ -131,8 +129,6 @@ We provide two simple examples in the `examples` folder:
 * `NC_000961.fasta`, which must be run as: `python Casboundary.py -f examples/NC_000961.fasta -c complete`.
 
 * `NC_017104.fasta`, which must be run as: `python Casboundary.py -f examples/NC_017104.fasta -c complete`
-
-* The found cassettes for any of the commands above can be plot by running: `python draw_cassettes.py ./casboundary_output/predictions`
 
 * The fasta files generated in the output path in the `predictions` directory can be given as input to [CRISPRcasIdentifier](https://github.com/BackofenLab/CRISPRcasIdentifier). For example:
 `python CRISPRcasIdentifier.py -f ./casboundary_output/predictions/cassette_1.fasta`
