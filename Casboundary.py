@@ -28,6 +28,7 @@ import glob
 import numpy as np
 import pandas as pd
 import joblib
+import time
 import warnings
 warnings.simplefilter('ignore')
 
@@ -55,6 +56,9 @@ ML_MODELS_DIR = 'ML_models'
 
 GEN_HMM_NAMES_FILE = 'gen_hmm_names.txt'
 CAS_HMM_NAMES_FILE = 'cas_hmm_names.txt'
+
+# minimum number of genes to define a cassette
+MIN_GENES = 3
 
 def find_potential_regions(fasta_file, sequence_completeness, output_dir, hmmsearch_output_dir, n_cpus, offset=50):
     print('Running Prodigal on input Fasta file.')
@@ -194,7 +198,7 @@ def find_boundaries(y_pred, max_gap, i_sig):
     
     return last_left, last_right
 
-def filter_and_merge_cassettes(cassettes_list, min_genes=3, max_unk=0.5, max_overlap=0.7):
+def filter_and_merge_cassettes(cassettes_list, min_genes=3, max_unk=0.5, max_overlap=0.65):
     cassettes_list = [c for c in sorted(cassettes_list, key=lambda c : -c.shape[0])
                       if (c['CasType'] == 'unknown').sum() <= int(c.shape[0] * max_unk)]
     merged = True
@@ -272,7 +276,7 @@ def write_final_predictions(cassette_pred_list, protein_sequences, output_dir, m
     if not os.path.exists(output_dir):
         os.mkdir(output_dir)
     
-    cassette_pred_list = filter_and_merge_cassettes(cassette_pred_list)
+    cassette_pred_list = filter_and_merge_cassettes(cassette_pred_list, min_genes=min_genes)
 
     for i, cassette_pred in enumerate(cassette_pred_list):
         cassette_sequences = [protein_sequences[idx] for idx in cassette_pred.index]
@@ -284,13 +288,15 @@ def write_final_predictions(cassette_pred_list, protein_sequences, output_dir, m
                 out_file.write(s.format('fasta'))
 
 if __name__ == '__main__':
+    start_time = time.time()
+
     from argparse import ArgumentParser
 
     parser = ArgumentParser()
     parser.add_argument('-f', '--fasta', dest='fasta_file', help='Organism DNA Fasta file.', metavar='/path/to/organism.fa', type=str)
     parser.add_argument('-c', '--sequence-completeness', nargs='?', dest='sequence_completeness', help='Sequence completeness of DNA Fasta file. Available options: complete or partial.', metavar='seq_comp', choices=['complete', 'partial'], type=str)
     parser.add_argument('-o', '--output-directory', nargs='?', dest='output_dir', help='Output directory path.', metavar='output_dir', default='./casboundary_output', type=str)
-    parser.add_argument('-n', '--number-of-cpus', nargs='?', dest='n_cpus', help='Number of CPUs to use.', default=1, type=int)
+    parser.add_argument('-n', '--number-of-cpus', nargs='?', dest='n_cpus', help='Number of CPUs to use (default: 8).', default=8, type=int)
     parser.add_argument('-g', '--maximum-gap', nargs='?', dest='max_gap', help='Maximum number of contiguous gaps allowed in a cassette. Available options: 0 <= gap <= 3 (default: 1).', type=int, choices=range(4), default=1)
     parser.add_argument('-m', '--model', nargs='?', dest='model', help='Which ML model will be used. Available obtions: ert and dnn (default: ert).', choices=['ert', 'dnn', 'ERT', 'DNN'], default='ert')
     parser.add_argument('-ho', '--hmmsearch-output-dir', nargs='?', dest='hmmsearch_output_dir', help='Hmmsearch output directory path.', metavar='hmmsearch_output_dir', default='./hmmsearch_output', type=str)
@@ -334,7 +340,7 @@ if __name__ == '__main__':
     cas_hmm_to_index = dict(zip(cas_hmm_names, np.arange(len(cas_hmm_names))))
 
     print('Running hmmsearches.')
-    run_hmmsearch(regions_fasta_file, GEN_HMM_DIR, gen_output_dir, args.n_cpus, 1000, use_mp=False)
+    run_hmmsearch(regions_fasta_file, GEN_HMM_DIR, gen_output_dir, args.n_cpus, 1000, use_mp=True)
     run_hmmsearch(regions_fasta_file, CAS_HMM_DIR, cas_output_dir, args.n_cpus, 1, use_mp=True)
     
     regions_gen_hmm_list = []
@@ -422,30 +428,51 @@ if __name__ == '__main__':
     final_predictions = []
 
     for i, (reg_df, X_hmm, X_prop) in enumerate(zip(regions_dataframes, regions_cas_hmm_list, regions_prop_list)):
-        start, end = boundaries_list[i]
-        reg_df = reg_df.iloc[start:end+1]
-        hmm_labels = label_best_hmm_hits(reg_df, [cas_output_dir, sig_output_dir])
+        b_start, b_end = boundaries_list[i]
 
-        X_hmm = regions_cas_hmm_list[i].toarray()
-        X_prop = regions_prop_list[i]
+        if abs(b_start - b_end) + 1 >= MIN_GENES:
+            start = max(0, b_start - 2)
+            added_start = b_start - start
+            end = min(reg_df.shape[0] - 1, b_end + 2)
+            added_end = end - b_end
+            
+            reg_df = reg_df.iloc[start:end+1]
+            hmm_labels = label_best_hmm_hits(reg_df, [cas_output_dir, sig_output_dir])
 
-        X_hmm = X_hmm[start:end+1]
-        X_hmm = model_maxabs_scaler.transform(X_hmm)
-        X_prop = X_prop[start:end+1]
-        X_prop = model_minmax_scaler.transform(X_prop)
-        X = np.hstack((X_hmm, X_prop))
-        y_pred = model_protein_clf.predict(X)
+            X_hmm = regions_cas_hmm_list[i].toarray()
+            X_prop = regions_prop_list[i]
 
-        consensus = []
-        for k in range(len(reg_df)):
-            if y_pred[k] != 'unknown' and hmm_labels[reg_df.index[k]][0] == 'unknown':
-                consensus.append(y_pred[k])
-            else:
-                consensus.append(hmm_labels[reg_df.index[k]][0])
+            X_hmm = X_hmm[start:end+1]
+            X_hmm = model_maxabs_scaler.transform(X_hmm)
+            X_prop = X_prop[start:end+1]
+            X_prop = model_minmax_scaler.transform(X_prop)
+            X = np.hstack((X_hmm, X_prop))
+            y_pred = model_protein_clf.predict(X)
 
-        rdf = regions_dataframes[i].iloc[start:end+1]
-        rdf = rdf.assign(CasType=consensus)
-        final_predictions.append(rdf)
+            consensus = []
+            for k in range(len(reg_df)):
+                if k < added_start or k >= len(reg_df) - added_end or (y_pred[k] != 'unknown' and hmm_labels[reg_df.index[k]][0] == 'unknown'):
+                    consensus.append(y_pred[k])
+                else:
+                    consensus.append(hmm_labels[reg_df.index[k]][0])
+            
+            # refinement steps
+            cs = added_start
+            s = b_start
+            while cs > 0 and consensus[cs - 1] != 'unknown':
+                cs -= 1
+                s -= 1
+
+            ce = len(consensus) - added_end - 1
+            e = b_end
+            while ce < len(consensus) - 1 and consensus[ce + 1] != 'unknown':
+                ce += 1
+                e += 1
+
+            rdf = regions_dataframes[i].iloc[s:e+1]
+            consens = consensus[cs:ce+1]
+            rdf = rdf.assign(CasType=consensus[cs:ce+1])
+            final_predictions.append(rdf)
 
     print('Merging and saving final predictions.')
     with open(proteins_fasta_file, 'r') as file_:
@@ -456,7 +483,7 @@ if __name__ == '__main__':
     
     print('Saving predictions.')
     cassettes_dir = args.output_dir + '/predictions'
-    write_final_predictions(final_predictions, all_sequences, cassettes_dir)
+    write_final_predictions(final_predictions, all_sequences, cassettes_dir, min_genes=MIN_GENES)
 
     if args.draw_cassettes:
         print('Drawing cassettes.')
@@ -464,3 +491,6 @@ if __name__ == '__main__':
 
         for f in files:
             draw_CRISPR_proteins(f)
+    
+    end_time = time.time()
+    print(f'Total runtime in seconds: {end_time - start_time:.2f}')

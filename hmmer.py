@@ -50,7 +50,7 @@ def run_hmmsearch(fasta_file, hmm_dir, output_dir, n_cpus, cutoff, hmmsearch_cmd
         log_file_path = os.path.join(output_dir, hmm.rsplit('/', 1)[1].replace('.hmm', '.log'))
 
         if use_mp:
-            p = [log_file_path, output_file_path, cutoff, hmm, fasta_file, 1, hmmsearch_cmd]
+            p = [log_file_path, output_file_path, cutoff, hmm, fasta_file, n_cpus, hmmsearch_cmd]
             params.append(p)
         else:
             hmmsearch(log_file_path, output_file_path, cutoff, hmm, fasta_file, n_cpus, hmmsearch_cmd)
