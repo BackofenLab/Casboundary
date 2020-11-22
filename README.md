@@ -12,10 +12,11 @@ To be added.
 
 Casboundary has been tested with Python 3.7.7. To run it, we recommend installing the same library versions we used. Since we exported our classifiers following the [model persistence guideline from scikit-learn](https://scikit-learn.org/stable/modules/model_persistence.html), it is not guaranteed that they will work properly if loaded using other Python and/or library versions. For such, we recommend the use of our docker image or a conda virtual environment. They make it easy to install the correct Python and library dependencies without affecting the whole operating system (see below).
 
-### First step: clone this repository
+### First step: download the last version of the tool and extract it
 
 ```
-git clone git@github.com:BackofenLab/Casboundary.git
+wget https://github.com/BackofenLab/Casboundary/archive/v1.0.0.tar.gz
+tar -xzf v1.1.0.tar.gz
 ```
 
 ### Second step: download the Hidden Markov (HMM) and Machine Learning (ML) models
