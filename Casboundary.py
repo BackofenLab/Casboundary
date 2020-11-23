@@ -297,7 +297,7 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--sequence-completeness', nargs='?', dest='sequence_completeness', help='Sequence completeness of DNA Fasta file. Available options: complete or partial.', metavar='seq_comp', choices=['complete', 'partial'], type=str)
     parser.add_argument('-o', '--output-directory', nargs='?', dest='output_dir', help='Output directory path.', metavar='output_dir', default='./casboundary_output', type=str)
     parser.add_argument('-n', '--number-of-cpus', nargs='?', dest='n_cpus', help='Number of CPUs to use (default: 8).', default=8, type=int)
-    parser.add_argument('-g', '--maximum-gap', nargs='?', dest='max_gap', help='Maximum number of contiguous gaps allowed in a cassette. Available options: 0 <= gap <= 3 (default: 2).', type=int, choices=range(4), default=1)
+    parser.add_argument('-g', '--maximum-gap', nargs='?', dest='max_gap', help='Maximum number of contiguous gaps allowed in a cassette. Available options: 0 <= gap <= 3 (default: 2).', type=int, choices=range(4), default=2)
     parser.add_argument('-m', '--model', nargs='?', dest='model', help='Which ML model will be used. Available obtions: ert and dnn (default: ert).', choices=['ert', 'dnn', 'ERT', 'DNN'], default='ert')
     parser.add_argument('-ho', '--hmmsearch-output-dir', nargs='?', dest='hmmsearch_output_dir', help='Hmmsearch output directory path.', metavar='hmmsearch_output_dir', default='./hmmsearch_output', type=str)
     parser.add_argument('-d', '--draw-cassettes', dest='draw_cassettes', action='store_true', help='Whether to draw the found cassettes.')
