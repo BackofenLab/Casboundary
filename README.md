@@ -6,7 +6,7 @@ Casboundary can be easily integrated with [CRISPRcasIdentifier](https://github.c
 
 ## Citation
 
-To be added.
+If you use Casboundary, please cite our paper: [Casboundary: Automated definition of integral Cas cassettes](https://academic.oup.com/bioinformatics/advance-article/doi/10.1093/bioinformatics/btaa984/5998667) Victor A. Padilha, Omer S. Alkhnbashi, Van Dinh Tran, Shiraz A. Shah, André C. P. L. F. de Carvalho, Rolf Backofen, Bioinformatics, 2020, DOI: [10.1093/bioinformatics/btaa984](https://doi.org/10.1093/bioinformatics/btaa984).
 
 ## Installation and requirements
 
