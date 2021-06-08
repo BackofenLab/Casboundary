@@ -24,6 +24,7 @@
 """
 
 import os
+import sys
 import glob
 import numpy as np
 import pandas as pd
@@ -327,6 +328,9 @@ if __name__ == '__main__':
     proteins_fasta_file, regions_dataframes = find_potential_regions(args.fasta_file, args.sequence_completeness,
                                                           args.output_dir, args.hmmsearch_output_dir,
                                                           args.n_cpus)
+    
+    if not regions_dataframes:
+        sys.exit('Casboundary has not found any potential CRISPR regions.')
     
     regions_fasta_file = extract_regions_sequences(proteins_fasta_file, regions_dataframes, args.output_dir)
 
